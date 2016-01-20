@@ -1,5 +1,6 @@
 # Object files
 *.o
+*.d
 *.ko
 *.obj
 *.elf
@@ -30,3 +31,16 @@
 
 # Debug files
 *.dSYM/
+
+# Build directories 
+build/
+
+# Example files
+examples/*
+
+# Help scripts
+utils/pintos-mkdisk
+utils/pintos-gdb
+utils/backtrace
+utils/qemu
+utils/setitimer-helper
