@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/init.h"
 #include "threads/vaddr.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -57,14 +58,7 @@ halt( void )
 	power_off();
 }
 
-/* Execute system call exit. */
-static void
-exit( void* esp )
-{
-	uint32_t arg = get_argument(esp, 0); 	// Get first argument
-	thread_exit ();
-}
-
+/* Execute system call write. */
 static void
 write(void *esp)
 {
@@ -89,13 +83,27 @@ write(void *esp)
 
 }
 
+/* Execute system call create. */
+static bool
+create( void *esp )
+{
+	/* Get arguments. */
+	const char* name = get_argument(esp, 0);
+	unsigned int size = get_argument(esp, 1);
+	
+	/* Try to create file. */
+	bool status = filesys_create(name, size);
+
+	/* Return status of file creation to user program. */
+	return status;
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  
-
 	// Get syscall number from stack.
 	int* esp = f->esp;
+	is_kernel_vaddr(esp);
 	int sys_nr = *esp;
 
 	/* Debug */
@@ -111,9 +119,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			write(esp);
 			break;
 
-		case SYS_EXIT: // Terminate user program and returns exit status to kernel
-			exit(esp);
-			NOT_REACHED();
+		case SYS_CREATE: // Create a file with specified size.
+			f->eax = create(esp);
 			break;
 
 		default: 
