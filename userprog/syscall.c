@@ -65,22 +65,33 @@ static void
 write(void *esp)
 {
 	/* Get arguments. */
-	uint32_t fd = get_argument(esp, 0);
+	int fd = get_argument(esp, 0);
 	const void* buffer = get_argument(esp, 1);
 	unsigned int size = get_argument(esp, 2);
 
-	if(fd == 1) { // Write to console
+	if(fd == 1) { // Write to console	
 		int n = size;
+		
 		while(n >= CONSOLE_BUFFER_SIZE) {
 			putbuf(buffer, CONSOLE_BUFFER_SIZE);
 			n -= CONSOLE_BUFFER_SIZE;
 			buffer += CONSOLE_BUFFER_SIZE;
 		}
+	
 		putbuf(buffer, n);		
+	
 		return size;
 	} else {	// Write to file with fd.
-		printf("Write to file not implemented yet.\n");
-		return -1;
+		struct thread *t = thread_current();
+		fd -= 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
+		
+		/* Check so the file is open. */
+		if (!bitmap_test(t->fd_bitmap, fd)) 
+			return -1;
+
+		/* Write to file with file descriptor fd. */
+		struct file* f = t->files[fd];
+		return file_write(f, buffer, size);
 	}
 
 }
@@ -121,7 +132,6 @@ open( void *esp )
 	}
 
 	t->files[fd] = f;
-
 	return fd + 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
 }
 
@@ -136,15 +146,24 @@ read( void *esp )
 	if (fd == 0) {
 		/* Console */
 		int n = 0;
+		
 		while(n < size){
 			*buf = input_getc(); /* Get a single key from keyboard. */
 			buf++; /* Go to next element in buffer. */
 			n++;
 		}
+		
 		return n;
 	} else {
-		/* Open file */
-		struct file* f = thread_current()->files[fd - 2];
+		struct thread *t = thread_current();
+		fd -= 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
+		
+		/* Check so the file is open. */
+		if (!bitmap_test(t->fd_bitmap, fd))
+			return -1;
+		
+		/* Read from file with file descriptor fd. */
+		struct file* f = t->files[fd];
 		return file_read(f, buf, size);
 	}
 }
@@ -157,6 +176,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	is_kernel_vaddr(esp);
 	int sys_nr = *esp;
 
+	// TODO: Make system call functions actually match syscall.h.
 	switch(sys_nr) {
 		case SYS_HALT: // Shutdown machine
 			halt();
