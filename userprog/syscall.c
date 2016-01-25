@@ -6,6 +6,8 @@
 #include "threads/init.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "devices/input.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -104,9 +106,9 @@ open( void *esp )
 {
 	/* Create file descriptor. */
 	struct thread* t = thread_current();
-	int fd = bitmap_scan_and_flip(t->fd_bitmap, 2, 1, 0); /* Fd 0 & 1 are reserved for console. */
+	int fd = bitmap_scan_and_flip(t->fd_bitmap, 0, 1, 0); 
 
-	if (fd == BITMAP_ERROR) /* Couldn't find a free file descriptort. */
+	if (fd == BITMAP_ERROR) /* Couldn't find a free file descriptor. */
 		return -1;						/* Can't open file. */
 
 	/* Open file in filesystem. */
@@ -118,7 +120,33 @@ open( void *esp )
 		return -1;
 	}
 
-	return fd;
+	t->files[fd] = f;
+
+	return fd + 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
+}
+
+static int
+read( void *esp )
+{
+	/* Get arguments. */
+	int fd = get_argument(esp, 0);
+	uint8_t* buf = get_argument(esp, 1);
+	unsigned int size = get_argument(esp, 2);
+
+	if (fd == 0) {
+		/* Console */
+		int n = 0;
+		while(n < size){
+			*buf = input_getc(); /* Get a single key from keyboard. */
+			buf++; /* Go to next element in buffer. */
+			n++;
+		}
+		return n;
+	} else {
+		/* Open file */
+		struct file* f = thread_current()->files[fd - 2];
+		return file_read(f, buf, size);
+	}
 }
 
 static void
@@ -145,6 +173,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 		case SYS_OPEN: // If possible open file.
 			f->eax = open(esp);	
+			break;
+
+		case SYS_READ: // Read from file or console.
+			f->eax = read(esp);
 			break;
 
 		default: 

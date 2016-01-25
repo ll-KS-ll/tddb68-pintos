@@ -96,8 +96,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct bitmap * fd_bitmap;   /* Bitmap of open file discriptors. */
     #define FD_SIZE 128
+    struct bitmap * fd_bitmap;    /* Bitmap of open file discriptors. */
+    struct file* files[FD_SIZE];  /* Pointers to opened files. */ 
 #endif
 
     /* Owned by thread.c. */
