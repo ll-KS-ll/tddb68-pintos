@@ -168,6 +168,22 @@ read( void *esp )
 	}
 }
 
+/* Execute system call close. */
+static void
+close( void *esp )
+{
+	/* Get arguments. */
+	int fd = get_argument(esp, 0);
+
+	struct thread *t = thread_current();
+	struct file *f = t->files[fd];
+
+	/* Close file. */
+	file_close(f); 
+	/* Clear file descriptor. */
+	bitmap_reset(t->fd_bitmap, fd);
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -197,6 +213,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 		case SYS_READ: // Read from file or console.
 			f->eax = read(esp);
+			break;
+
+		case SYS_CLOSE:
+			close(esp);
 			break;
 
 		default: 
