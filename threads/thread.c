@@ -192,6 +192,13 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
 
+  #ifdef USERPROG
+  	t->fd_bitmap = bitmap_create (FD_SIZE);
+  	if (t->fd_bitmap == NULL)
+  		PANIC("FD bitmap is too big! :s");
+  	bitmap_set_multiple (t->fd_bitmap, 0, 2, 1); /* Fd 0 & 1 are reserved for console. */
+  #endif
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -278,6 +285,7 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+  bitmap_destroy(thread_current ()->fd_bitmap);
 #endif
 
   /* Just set our status to dying and schedule another process.

@@ -45,7 +45,7 @@ static uint32_t
 get_argument(void* esp,  int argn)
 {
 	uint32_t* argv = esp + (argn + 1) * 4;
-	if( get_user(argv) != -1)
+	if( get_user(argv) != -1) 	// TODO: Test all 4 bytes, not just first.
 		return *argv;
 	thread_exit();
 	NOT_REACHED();
@@ -98,6 +98,29 @@ create( void *esp )
 	return status;
 }
 
+/* Execute system call open. */
+static int
+open( void *esp )
+{
+	/* Create file descriptor. */
+	struct thread* t = thread_current();
+	int fd = bitmap_scan_and_flip(t->fd_bitmap, 2, 1, 0); /* Fd 0 & 1 are reserved for console. */
+
+	if (fd == BITMAP_ERROR) /* Couldn't find a free file descriptort. */
+		return -1;						/* Can't open file. */
+
+	/* Open file in filesystem. */
+	const char* name = get_argument(esp, 0);
+	struct file* f = filesys_open(name); 
+	
+	if (f == NULL) {	/* Couldn't open file with given name. */
+		bitmap_reset(t->fd_bitmap, fd);	/* Reset unused file descriptor. */  
+		return -1;
+	}
+
+	return fd;
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
@@ -105,9 +128,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 	int* esp = f->esp;
 	is_kernel_vaddr(esp);
 	int sys_nr = *esp;
-
-	/* Debug */
-	printf("System call %d\n", sys_nr);
 
 	switch(sys_nr) {
 		case SYS_HALT: // Shutdown machine
@@ -121,6 +141,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 		case SYS_CREATE: // Create a file with specified size.
 			f->eax = create(esp);
+			break;
+
+		case SYS_OPEN: // If possible open file.
+			f->eax = open(esp);	
 			break;
 
 		default: 
