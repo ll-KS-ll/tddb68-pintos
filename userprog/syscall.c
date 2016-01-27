@@ -47,7 +47,7 @@ static uint32_t
 get_argument(void* esp,  int argn)
 {
 	uint32_t* argv = esp + (argn + 1) * 4;
-	if( get_user(argv) != -1) 	// TODO: Test all 4 bytes, not just first.
+	if( get_user(argv + 3) != -1) /* Test last byte of argument. */
 		return *argv;
 	thread_exit();
 	NOT_REACHED();
@@ -216,12 +216,16 @@ exit( void* esp )
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-	// Get syscall number from stack.
+	/* Get syscall number from stack. */
 	int* esp = f->esp;
-	is_kernel_vaddr(esp); // TODO: Exit thread if not valid. 
+	/* Check so pointers aren't in kernel memory. */
+	if(is_kernel_vaddr(esp)) {
+		printf("Process tried to access kernel memory through bad pointers in syscalls.\n");
+		thread_exit();
+		NOT_REACHED();
+	}
 	int sys_nr = *esp;
 
-	// TODO: Make system call functions actually match syscall.h.
 	switch(sys_nr) {
 		case SYS_HALT: // Shutdown machine
 			halt();
