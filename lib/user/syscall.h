@@ -19,6 +19,10 @@ typedef int mapid_t;
 #define EXIT_SUCCESS 0          /* Successful execution. */
 #define EXIT_FAILURE 1          /* Unsuccessful execution. */
 
+/* Reserved file descriptors. */
+#define STDIN_FILENO 0	/* Standard input. Read from console. */
+#define STDOUT_FILENO 1	/* Standard output. Write to console. */
+
 /* Projects 2 and later. */
 void halt (void) NO_RETURN;
 void exit (int status) NO_RETURN;

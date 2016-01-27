@@ -118,7 +118,7 @@ write(void *esp)
 	const void* buffer = get_argument(esp, 1);
 	unsigned int size = get_argument(esp, 2);
 
-	if(fd == STDOUT_FILENO) { // Write to console	
+	if(fd == STDOUT_FILENO) {
 		int n = size;
 		
 		while(n >= CONSOLE_BUFFER_SIZE) {
@@ -153,7 +153,7 @@ read( void *esp )
 	uint8_t* buf = get_argument(esp, 1);
 	unsigned int size = get_argument(esp, 2);
 
-	if (fd == STDOUT_FILENO) {
+	if (fd == STDIN_FILENO) {
 		int n = 0;
 		
 		while(n < size){
@@ -197,6 +197,23 @@ close( void *esp )
 }
 
 static void
+exit( void* esp )
+{
+	int status = get_argument(esp, 0);
+
+	/* Close all opened files. */
+	size_t fd;
+	struct thread *t = thread_current(); 
+	struct bitmap *bm = t->fd_bitmap;
+	while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR){
+		file_close(t->files[fd]);
+	}
+
+	/* Exit process. */
+	thread_exit();
+}
+
+static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
 	// Get syscall number from stack.
@@ -229,6 +246,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 		case SYS_CLOSE: // Close file.
 			close(esp);
+			break;
+
+		case SYS_EXIT: // Exit process.
+			exit(esp);
 			break;
 
 		default: 
