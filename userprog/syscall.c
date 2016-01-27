@@ -60,42 +60,6 @@ halt( void )
 	power_off();
 }
 
-/* Execute system call write. */
-static void
-write(void *esp)
-{
-	/* Get arguments. */
-	int fd = get_argument(esp, 0);
-	const void* buffer = get_argument(esp, 1);
-	unsigned int size = get_argument(esp, 2);
-
-	if(fd == 1) { // Write to console	
-		int n = size;
-		
-		while(n >= CONSOLE_BUFFER_SIZE) {
-			putbuf(buffer, CONSOLE_BUFFER_SIZE);
-			n -= CONSOLE_BUFFER_SIZE;
-			buffer += CONSOLE_BUFFER_SIZE;
-		}
-	
-		putbuf(buffer, n);		
-	
-		return size;
-	} else {	// Write to file with fd.
-		struct thread *t = thread_current();
-		fd -= 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
-		
-		/* Check so the file is open. */
-		if (!bitmap_test(t->fd_bitmap, fd)) 
-			return -1;
-
-		/* Write to file with file descriptor fd. */
-		struct file* f = t->files[fd];
-		return file_write(f, buffer, size);
-	}
-
-}
-
 /* Execute system call create. */
 static bool
 create( void *esp )
@@ -135,6 +99,52 @@ open( void *esp )
 	return fd + 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
 }
 
+/* Check if file descriptor is valid. */
+static bool 
+valid_fd(int fd)
+{	
+	struct thread *t = thread_current();
+	return fd >= 0 && 
+					fd < FD_SIZE && 
+					bitmap_test(t->fd_bitmap, fd);
+}
+
+/* Execute system call write. */
+static int
+write(void *esp)
+{
+	/* Get arguments. */
+	int fd = get_argument(esp, 0);
+	const void* buffer = get_argument(esp, 1);
+	unsigned int size = get_argument(esp, 2);
+
+	if(fd == STDOUT_FILENO) { // Write to console	
+		int n = size;
+		
+		while(n >= CONSOLE_BUFFER_SIZE) {
+			putbuf(buffer, CONSOLE_BUFFER_SIZE);
+			n -= CONSOLE_BUFFER_SIZE;
+			buffer += CONSOLE_BUFFER_SIZE;
+		}
+	
+		putbuf(buffer, n);		
+	
+		return size;
+	} else {	// Write to file with fd.
+		/* File descriptors 0 & 1 are reserved for console. Skip those.*/
+		fd -= 2; 
+
+		/* Control file descriptor. */
+		if(!valid_fd(fd))
+			return -1;
+
+		/* Write to file with file descriptor fd. */
+		struct file* f = thread_current()->files[fd];
+		return file_write(f, buffer, size);
+	}
+
+}
+
 static int
 read( void *esp )
 {
@@ -143,8 +153,7 @@ read( void *esp )
 	uint8_t* buf = get_argument(esp, 1);
 	unsigned int size = get_argument(esp, 2);
 
-	if (fd == 0) {
-		/* Console */
+	if (fd == STDOUT_FILENO) {
 		int n = 0;
 		
 		while(n < size){
@@ -155,15 +164,15 @@ read( void *esp )
 		
 		return n;
 	} else {
-		struct thread *t = thread_current();
-		fd -= 2; /* Fd 0 & 1 are reserved for console. Skip those.*/
-		
-		/* Check so the file is open. */
-		if (!bitmap_test(t->fd_bitmap, fd))
+		/* File descriptors 0 & 1 are reserved for console. Skip those.*/
+		fd -= 2; 
+
+		/* Control file descriptor. */
+		if(!valid_fd(fd))
 			return -1;
-		
+
 		/* Read from file with file descriptor fd. */
-		struct file* f = t->files[fd];
+		struct file* f = thread_current()->files[fd];
 		return file_read(f, buf, size);
 	}
 }
@@ -174,6 +183,9 @@ close( void *esp )
 {
 	/* Get arguments. */
 	int fd = get_argument(esp, 0);
+
+	/* Validate file descriptor. */
+	if(!valid_fd(fd)) return;
 
 	struct thread *t = thread_current();
 	struct file *f = t->files[fd];
@@ -189,7 +201,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
 	// Get syscall number from stack.
 	int* esp = f->esp;
-	is_kernel_vaddr(esp);
+	is_kernel_vaddr(esp); // TODO: Exit thread if not valid. 
 	int sys_nr = *esp;
 
 	// TODO: Make system call functions actually match syscall.h.
@@ -197,10 +209,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 		case SYS_HALT: // Shutdown machine
 			halt();
 			NOT_REACHED();
-			break;
-
-		case SYS_WRITE: // Write to file or consol.
-			write(esp);
 			break;
 
 		case SYS_CREATE: // Create a file with specified size.
@@ -211,11 +219,15 @@ syscall_handler (struct intr_frame *f UNUSED)
 			f->eax = open(esp);	
 			break;
 
+		case SYS_WRITE: // Write to file or consol.
+			f->eax = write(esp);
+			break;
+
 		case SYS_READ: // Read from file or console.
 			f->eax = read(esp);
 			break;
 
-		case SYS_CLOSE:
+		case SYS_CLOSE: // Close file.
 			close(esp);
 			break;
 
