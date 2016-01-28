@@ -283,7 +283,15 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+    /* Close all opened files. */
+  size_t fd;
+  struct thread *t = thread_current(); 
+  struct bitmap *bm = t->fd_bitmap;
+  while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR)
+    file_close(t->files[fd]);
+
   process_exit ();
+  
   bitmap_destroy(thread_current ()->fd_bitmap);
 #endif
 

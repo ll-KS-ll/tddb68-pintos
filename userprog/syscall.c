@@ -200,15 +200,7 @@ static void
 exit( void* esp )
 {
 	int status = get_argument(esp, 0);
-
-	/* Close all opened files. */
-	size_t fd;
-	struct thread *t = thread_current(); 
-	struct bitmap *bm = t->fd_bitmap;
-	while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR){
-		file_close(t->files[fd]);
-	}
-
+	
 	/* Exit process. */
 	thread_exit();
 }
