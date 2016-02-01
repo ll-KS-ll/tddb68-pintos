@@ -93,6 +93,10 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  /* Init the sleeper list for sleeping threads. */
+  init_list(&sleeper_list); 
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -118,6 +122,8 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+
+  // TODO: Check sleeping threads if they should be woken. 
 
   /* Update statistics. */
   if (t == idle_thread)

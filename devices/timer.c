@@ -99,8 +99,15 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  
+  /* TODO: Add semaphor and ticks to sleper threads. Also sema down to block thread.*/
+  struct semaphore s; // Example
+  sema_init(&s, 0);   // Example
+  sleeper = &s;       // Example
+  sema_down(&s); //zzz... // Example
+  
+  //while (timer_elapsed (start) < ticks) 
+  //  thread_yield ();
 }
 
 /* Suspends execution for approximately MS milliseconds. */

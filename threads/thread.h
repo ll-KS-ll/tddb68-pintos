@@ -105,6 +105,17 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+/* Sleeper list item. */
+struct sleeper{
+  int64_t ticks;  /* Number of ticks to sleeep. */
+  struct semaphore *sema;  /* Semaphore to down and up for sleeping and wakeing.*/
+  
+  struct list_item elem;  /* List element. */
+}; 
+
+/* Sleeper list for sleeping threads. */
+struct list sleeper_list;
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
