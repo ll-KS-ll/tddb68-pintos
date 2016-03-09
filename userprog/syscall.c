@@ -197,6 +197,16 @@ close( void *esp )
   bitmap_reset(t->fd_bitmap, fd);
 }
 
+/* Execute system call execute. */
+static int
+exec( void* esp )
+{
+  const char* cmd_line = get_argument(esp, 0);
+  int pid = process_execute(cmd_line);
+  return pid;
+}
+
+
 /* Execute system call exit. */
 static void
 exit( void* esp )
@@ -244,6 +254,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_CLOSE: // Close file.
       close(esp);
+      break;
+
+    case SYS_EXEC: // Start a process
+      f->eax = exec(esp);
       break;
 
     case SYS_EXIT: // Exit process.

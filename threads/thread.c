@@ -194,13 +194,19 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
 
   #ifdef USERPROG
-  	t->fd_bitmap = bitmap_create (FD_SIZE);
+    sema_init(&t->sema_wait, 0);
+  	t->exit_status = 0; // Init exit status to ok (0)
+    t->fd_bitmap = bitmap_create (FD_SIZE);
   	if (t->fd_bitmap == NULL)
   		PANIC("FD bitmap is too big! :s");
   #endif
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  #ifdef USERPROG
+    sema_down(&t->sema_wait);
+  #endif
 
   return tid;
 }
@@ -415,7 +421,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
