@@ -145,6 +145,7 @@ write(void *esp)
 
 }
 
+/* Execute system call read. */
 static int
 read( void *esp )
 {
@@ -196,6 +197,7 @@ close( void *esp )
   bitmap_reset(t->fd_bitmap, fd);
 }
 
+/* Execute system call exit. */
 static void
 exit( void* esp )
 {
