@@ -87,16 +87,13 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&sleeper_list); /* Init the sleeper list for sleeping threads. */
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
-  /* Init the sleeper list for sleeping threads. */
-  init_list(&sleeper_list); 
-
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -122,8 +119,6 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
-
-  // TODO: Check sleeping threads if they should be woken. 
 
   /* Update statistics. */
   if (t == idle_thread)

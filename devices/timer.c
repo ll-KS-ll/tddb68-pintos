@@ -7,7 +7,8 @@
 #include "threads/io.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+#include "threads/malloc.h"  
+
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -96,18 +97,21 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
   
-  /* TODO: Add semaphor and ticks to sleper threads. Also sema down to block thread.*/
-  struct semaphore s; // Example
-  sema_init(&s, 0);   // Example
-  sleeper = &s;       // Example
-  sema_down(&s); //zzz... // Example
+  /* Allocate a semaphor for sleeper list_item. */
+  struct semaphore *s = (struct semaphore *)malloc(sizeof( struct semaphore ));
+  sema_init(s, 0);
   
-  //while (timer_elapsed (start) < ticks) 
-  //  thread_yield ();
+  /* Allocate a sleeper list_item for the sleeper list. */
+  struct sleeper *sleepy = (struct sleeper *)malloc(sizeof( struct sleeper ));
+  sleepy->ticks = ticks;
+  sleepy->start = timer_ticks ();
+  sleepy->sema = s;
+
+  list_push_back (&sleeper_list, &sleepy->elem); /* Add sleeper to sleeper list. */ 
+  
+  sema_down (sleepy->sema); //zzz...
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -143,6 +147,28 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  
+      /* Check for sleeping threads to wake. */
+  struct list_elem *e;  
+  
+  for (e = list_begin (&sleeper_list); 
+    e != list_end (&sleeper_list); 
+    e = list_next (e))
+  {
+    struct sleeper *sleepy = list_entry (e, struct sleeper, elem);
+  
+    if (timer_elapsed (sleepy->start) > sleepy->ticks ) {
+      /* Wakey wakey */
+      sema_up(sleepy->sema);
+      /* Free resources. */
+      //free(sleepy->sema);
+      //free(sleepy);
+      /* Delete list item */ 
+      e = list_prev(list_remove(e)); 
+    }
+  }
+
+
   thread_tick ();
 }
 

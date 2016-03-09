@@ -106,12 +106,14 @@ struct thread
   };
 
 /* Sleeper list item. */
-struct sleeper{
-  int64_t ticks;  /* Number of ticks to sleeep. */
-  struct semaphore *sema;  /* Semaphore to down and up for sleeping and wakeing.*/
-  
-  struct list_item elem;  /* List element. */
-}; 
+struct sleeper 
+  {
+    int64_t ticks;          /* Number of ticks to sleeep. */
+    int64_t start;          /* Number of ticks OS had when sleep was called. */ 
+    struct semaphore *sema; /* Semaphore to down and up for sleeping and wakeing. */
+    
+    struct list_elem elem;  /* List element. */
+  }; 
 
 /* Sleeper list for sleeping threads. */
 struct list sleeper_list;
