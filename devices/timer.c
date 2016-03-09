@@ -157,7 +157,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   {
     struct sleeper *sleepy = list_entry (e, struct sleeper, elem);
   
-    if (timer_elapsed (sleepy->start) > sleepy->ticks ) {
+    if (timer_elapsed (sleepy->start) >= sleepy->ticks ) {
       /* Wakey wakey */
       sema_up(sleepy->sema);
       /* Free resources. */
