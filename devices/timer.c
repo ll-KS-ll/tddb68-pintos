@@ -112,6 +112,10 @@ timer_sleep (int64_t ticks)
   list_push_back (&sleeper_list, &sleepy->elem); /* Add sleeper to sleeper list. */ 
   
   sema_down (sleepy->sema); //zzz...
+
+  /* Free resources. */
+  free(s);
+  free(sleepy);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -160,9 +164,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if (timer_elapsed (sleepy->start) >= sleepy->ticks ) {
       /* Wakey wakey */
       sema_up(sleepy->sema);
-      /* Free resources. */
-      //free(sleepy->sema);
-      //free(sleepy);
       /* Delete list item */ 
       e = list_prev(list_remove(e)); 
     }
