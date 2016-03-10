@@ -195,6 +195,7 @@ thread_create (const char *name, int priority,
 
   #ifdef USERPROG
     sema_init(&t->sema_wait, 0);
+    list_init (&t->child_status_list);
   	t->exit_status = 0; // Init exit status to ok (0)
     t->fd_bitmap = bitmap_create (FD_SIZE);
   	if (t->fd_bitmap == NULL)
@@ -372,7 +373,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by

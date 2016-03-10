@@ -42,6 +42,14 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
+  cs->pid = tid;
+  cs->ref_cnt = 2;
+  lock_init(&cs->l);
+  sema_init(&cs->sema_wait, 0);
+  list_push_back(&(thread_current()->child_status_list), &cs->elem);
+
   return tid;
 }
 
@@ -61,12 +69,26 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  sema_up(&(thread_current()->sema_wait));
-
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  struct thread *parent = thread_current()->parent;
+
+  struct list_elem *e;  
+  for (e = list_begin (&parent->child_status_list); 
+    e != list_end (&parent->child_status_list); 
+    e = list_next (e))
+  {
+    struct child_status *cs = list_entry (e, struct child_status, elem);
+    if (cs->pid == thread_current()->tid) {
+      cs->exit_status = thread_current()->exit_status;
+      thread_current()->cs = cs;
+    }
+  }
+
+  sema_up(&(thread_current()->sema_wait));
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -90,9 +112,31 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while(1){
-  // ########################################### Infinite loop! ##############################################
+  struct thread *parent = thread_current();
+  struct child_status *cs;
+  struct list_elem *e;  
+  for (e = list_begin (&parent->child_status_list); 
+    e != list_end (&parent->child_status_list); 
+    e = list_next (e))
+  {
+    struct child_status *child_status = list_entry (e, struct child_status, elem);
+    if (child_status->pid == child_tid) {
+      cs = child_status;
+    }
   }
+
+  lock_acquire(&cs->l);
+  cs->ref_cnt--;
+  lock_release(&cs->l);
+  
+  if(cs->ref_cnt != 0)
+    sema_down(&cs->sema_wait);
+
+  int exit_status = cs->exit_status;
+  list_remove(&cs->elem);
+  free(cs);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */
@@ -101,6 +145,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  struct child_status *cs = cur->cs;
+
+  lock_acquire(&cs->l);
+  cs->ref_cnt--;
+  cs->exit_status = cur->exit_status;
+  lock_release(&cs->l);
+
+  if(cs->ref_cnt == 0)
+    sema_up(&cs->sema_wait);
+
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
   /* Destroy the current process's page directory and switch back
@@ -136,7 +190,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -359,7 +413,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);

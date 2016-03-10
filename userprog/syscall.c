@@ -206,6 +206,14 @@ exec( void* esp )
   return pid;
 }
 
+static int
+wait( void* esp)
+{
+  int pid = get_argument(esp, 0);
+  int exit_status = process_wait(pid);
+  return exit_status;
+}
+
 
 /* Execute system call exit. */
 static void
@@ -213,6 +221,8 @@ exit( void* esp )
 {
   int status = get_argument(esp, 0);
   
+  thread_current()->exit_status = status;
+
   /* Exit process. */
   thread_exit();
 }
@@ -258,6 +268,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_EXEC: // Start a process
       f->eax = exec(esp);
+      break;
+
+    case SYS_WAIT:
+      f->eax = wait(esp);
       break;
 
     case SYS_EXIT: // Exit process.
