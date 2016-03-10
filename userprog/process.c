@@ -17,6 +17,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
+#include "lib/kernel/list.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -28,9 +30,14 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
+  printf("Process execute begin!\n");
   char *fn_copy;
+  char *save_ptr;
   tid_t tid;
-
+  
+  struct thread *parent = thread_current();
+  printf("Parent: %s\n", parent->name);
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -38,18 +45,17 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  file_name = strtok_r(file_name, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  struct child *child = (struct child*)malloc(sizeof(struct child*));
+  sema_init(&child->sema_wait, 0);
+  list_push_back(&parent->children_list, &child->elem);  
+  sema_down(&child->sema_wait);
 
-  struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
-  cs->pid = tid;
-  cs->ref_cnt = 2;
-  lock_init(&cs->l);
-  sema_init(&cs->sema_wait, 0);
-  list_push_back(&(thread_current()->child_status_list), &cs->elem);
-
+  printf("Process execute end!\n");
   return tid;
 }
 
@@ -58,6 +64,10 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  printf("Start process begin\n");
+  struct thread *t = thread_current();
+  printf("Name: %s\n", t->name);
+
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -69,27 +79,14 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  printf("Load completed\n");
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
-  struct thread *parent = thread_current()->parent;
-
-  struct list_elem *e;  
-  for (e = list_begin (&parent->child_status_list); 
-    e != list_end (&parent->child_status_list); 
-    e = list_next (e))
-  {
-    struct child_status *cs = list_entry (e, struct child_status, elem);
-    if (cs->pid == thread_current()->tid) {
-      cs->exit_status = thread_current()->exit_status;
-      thread_current()->cs = cs;
-    }
-  }
-
-  sema_up(&(thread_current()->sema_wait));
-
+  sema_up(&t->sema_wait);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -112,7 +109,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1) {
+
+  }
+  /*
+  printf("Process wait begin\n");
   struct thread *parent = thread_current();
+  printf("Nisse Parent: %s\n", parent);
   struct child_status *cs;
   struct list_elem *e;  
   for (e = list_begin (&parent->child_status_list); 
@@ -135,14 +138,17 @@ process_wait (tid_t child_tid UNUSED)
   int exit_status = cs->exit_status;
   list_remove(&cs->elem);
   free(cs);
-
+  
+  printf("Process wait end\n");
   return exit_status;
+  */
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
+  printf("Process exit begin\n");
   struct thread *cur = thread_current ();
   uint32_t *pd;
   struct child_status *cs = cur->cs;
@@ -152,8 +158,10 @@ process_exit (void)
   cs->exit_status = cur->exit_status;
   lock_release(&cs->l);
 
+  // TODO: Free resources
+
   if(cs->ref_cnt == 0)
-    sema_up(&cs->sema_wait);
+    //sema_up(&cs->sema_wait);
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
@@ -267,6 +275,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  printf("Load begin\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -285,10 +294,57 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   }
 
+  printf("Start push arguments stack\n");
+
+  /* Push arguments on stack. */
+  char *argv[32];
+  int argc = 0; 
+  char *token, *save_ptr;
+  char *cmdline = file_name;
+  printf("Filename: %s\n", file_name);
+  printf("CMD line: %s\n", cmdline);
+
+  file_name = strtok_r(file_name, " ", &save_ptr);
+  printf("Filename: %s\n", file_name);
+
+  /* Push argv values. */
+  for (token = strtok_r (cmdline, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr))
+  {
+    *esp -= strlen(token) + 1;
+    memcpy(*esp, token, strlen(token) + 1);
+    argv[argc++] = (char*) *esp;
+    if(argc == 31) 
+      break;
+  }
+  argv[argc] = 0;
+
+  /* Align */
+  // *esp -= Fuck align
+
+  for (int i = argc; i >= 0; i--) {
+    *esp -= sizeof(argv[i]);
+    memcpy(*esp, &argv[i], sizeof(argv[i]));
+  } 
+  printf("%s\n", "Text");
+
+  /* Push argv. */
+  void* tmp = *esp;
+  *esp -= sizeof(&tmp);
+  memcpy(*esp, &tmp, sizeof(&tmp));
+  /* Push argc. */
+  *esp -= sizeof(argc);
+  memcpy(*esp, &argc, sizeof(argc));
+  /* Push fake return address */
+  *esp -= sizeof(argv[argc]);
+  memcpy(*esp, &argv[argc], sizeof(argv[argc]));
+
+  printf("Time for stack debug!\n");
+
    /* Uncomment the following line to print some debug
      information. This will be useful when you debug the program
      stack.*/
-/*#define STACK_DEBUG*/
+//#define STACK_DEBUG
 
 #ifdef STACK_DEBUG
   printf("*esp is %p\nstack contents:\n", *esp);
@@ -535,7 +591,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12; // ########################  Changed to -12. #########################
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }

@@ -162,6 +162,7 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
+  printf("Thread create begin!\n");
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -194,9 +195,14 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
 
   #ifdef USERPROG
+    printf("Name: %s\n", t->name);
     sema_init(&t->sema_wait, 0);
-    list_init (&t->child_status_list);
+    list_init (&t->children_list);
   	t->exit_status = 0; // Init exit status to ok (0)
+    struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
+    cs->ref_cnt = 2;
+    lock_init(&cs->l);
+    t->cs = cs;
     t->fd_bitmap = bitmap_create (FD_SIZE);
   	if (t->fd_bitmap == NULL)
   		PANIC("FD bitmap is too big! :s");
@@ -205,10 +211,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  #ifdef USERPROG
-    sema_down(&t->sema_wait);
-  #endif
-
+  printf("Thread create end!\n");
   return tid;
 }
 
@@ -294,6 +297,7 @@ thread_exit (void)
     /* Close all opened files. */
   size_t fd;
   struct thread *t = thread_current(); 
+  free(&t->cs);
   struct bitmap *bm = t->fd_bitmap;
   while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR)
     file_close(t->files[fd]);

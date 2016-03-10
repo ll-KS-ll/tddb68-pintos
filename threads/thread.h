@@ -98,9 +98,8 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct semaphore sema_wait;
-    struct thread *parent;
     int exit_status;
-    struct list child_status_list;  /* Child status list for keeping exit statuses. */
+    struct list children_list;  /* Child status list for keeping exit statuses. */
     struct child_status *cs;
     #define FD_SIZE 128
     struct bitmap * fd_bitmap;    /* Bitmap of open file discriptors. */
@@ -111,15 +110,20 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+struct child
+  {
+    int pid;
+    struct semaphore sema_wait;
+
+    struct list_elem elem;
+  };
 
 /* Child status list item.*/
 struct child_status
   {
-    int pid; /* Process id of child. */
-    int exit_status;
     int ref_cnt;
+    int exit_status;
     struct lock l; 
-    struct semaphore sema_wait;
 
     struct list_elem elem;
   };  
