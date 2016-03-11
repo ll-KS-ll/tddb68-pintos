@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -298,6 +299,7 @@ thread_tid (void)
 struct thread *
 get_child (struct thread *parent, tid_t tid)
 {
+  #ifdef USERPROG
   //printf("Get child with tid %d from parent %s.\n", tid, parent->name);
   struct list_elem *e;
   struct list *children = &parent->children_list; 
@@ -309,6 +311,7 @@ get_child (struct thread *parent, tid_t tid)
       if(c->tid == tid)
         return c;
     }
+  #endif
   printf("Couldn't retrieve child with tid %d for parent %s.\n", tid, parent->name);
   return NULL;
 }
@@ -326,8 +329,12 @@ thread_exit (void)
   size_t fd;
   struct thread *t = thread_current(); 
   struct bitmap *bm = t->fd_bitmap;
-  while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR)
+  while(1) {
+    fd = bitmap_scan_and_flip(bm, 0, 1, 1);
+    if(fd == BITMAP_ERROR)
+      break;
     file_close(t->files[fd]);
+  }
 
   process_exit ();
   
