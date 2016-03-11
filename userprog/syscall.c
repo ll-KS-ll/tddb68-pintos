@@ -47,7 +47,7 @@ static uint32_t
 get_argument(void* esp,  int argn)
 {
   uint32_t* argv = esp + (argn + 1) * 4;
-  if( get_user(argv + 3) != -1) /* Test last byte of argument. */
+  if( get_user(argv + 3) != -1 && *argv != NULL) /* Test last byte of argument. */
     return *argv;
   thread_current()->exit_status = -1;
   thread_exit();
