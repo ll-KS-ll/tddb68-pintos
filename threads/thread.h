@@ -98,10 +98,13 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;            /* Exit code for when terminating. */
-    struct semaphore sema_wait; /* Sleep and wake a perent process. */
+    struct semaphore sema_sleep;/* Sleep and wake thread. */
+    struct semaphore sema_wait; /* Sleep and wake process wait. */
+    struct semaphore sema_exit; /* Sleep and wake process exit. */
     struct list_elem celem;     /* List element for children. */ 
-    struct list children_list;  /* Child status list for keeping exit statuses. */
-    struct child_status *cs;
+    struct list children_list;  /* List of children of this thread. */
+    struct child_status *cs;    /* Child status to use with parent for exit code. */
+    struct lock cslock;         /* Lock for modifying child status. */
     #define FD_SIZE 128
     struct bitmap * fd_bitmap;    /* Bitmap of open file discriptors. */
     struct file* files[FD_SIZE];  /* Pointers to opened files. */ 
@@ -117,7 +120,6 @@ struct child_status
   {
     int ref_cnt;
     int exit_status;
-    struct lock l; 
 
     struct list_elem elem;
   };  

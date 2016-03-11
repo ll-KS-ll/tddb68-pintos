@@ -162,8 +162,8 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
-  printf("Thread create begin!\n");
-  printf("Thread create current: %s\n", thread_name());
+  // printf("Thread create begin!\n");
+  // printf("Thread create current: %s\n", thread_name());
 
   struct thread *t;
   struct kernel_thread_frame *kf;
@@ -182,7 +182,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  printf("Thread create new: %s\n", t->name);
+  // printf("Thread create new: %s\n", t->name);
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -203,14 +203,15 @@ thread_create (const char *name, int priority,
     list_init (&parent->children_list); /* Init threads children list. */
     list_push_back(&parent->children_list, &t->celem);
     
+    sema_init (&t->sema_sleep, 0);  /* Init semaphore for sleeping parents. */
     sema_init (&t->sema_wait, 0);  /* Init semaphore for sleeping parents. */
-    //list_init (&t->children_list); /* Init threads children list. */
+    sema_init (&t->sema_exit, 0);  /* Init semaphore for sleeping parents. */
   	t->exit_status = 0;            /* Init exit status to ok (0). */
+    lock_init(&t->cslock);
     
-    //struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
-    //cs->ref_cnt = 2;
-    //lock_init(&cs->l);
-    //t->cs = cs;
+    struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
+    cs->ref_cnt = 2;
+    t->cs = cs;
     t->fd_bitmap = bitmap_create (FD_SIZE);
   	if (t->fd_bitmap == NULL)
   		PANIC("FD bitmap is too big! :s");
@@ -219,7 +220,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  printf("Thread create end!\n");
+  // printf("Thread create end!\n");
   return tid;
 }
 
@@ -297,16 +298,18 @@ thread_tid (void)
 struct thread *
 get_child (struct thread *parent, tid_t tid)
 {
+  //printf("Get child with tid %d from parent %s.\n", tid, parent->name);
   struct list_elem *e;
   struct list *children = &parent->children_list; 
   for (e = list_begin (children); e != list_end (children);
        e = list_next (e))
     {
       struct thread *c = list_entry (e, struct thread, celem);
+      //printf("Child: %s\n", c->name);
       if(c->tid == tid)
         return c;
     }
-  printf("Couldn't retrieve child with tid %d for parent %s.\n", tid, parent);
+  printf("Couldn't retrieve child with tid %d for parent %s.\n", tid, parent->name);
   return NULL;
 }
 
@@ -322,7 +325,6 @@ thread_exit (void)
     /* Close all opened files. */
   size_t fd;
   struct thread *t = thread_current(); 
-  //free(&t->cs);
   struct bitmap *bm = t->fd_bitmap;
   while( fd = bitmap_scan_and_flip(bm, 0, 1, 1) != BITMAP_ERROR)
     file_close(t->files[fd]);

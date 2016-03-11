@@ -30,12 +30,11 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  printf("Process execute '%s' begin!\n", thread_name());
+  // printf("Process execute '%s' begin!\n", thread_name());
   char *fn_copy;
   char *save_ptr;
   tid_t tid;
   
-  struct thread *parent = thread_current();
   
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -51,12 +50,13 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
   
 
+  struct thread *parent = thread_current();
   struct thread *child = get_child(parent, tid);
-  printf("Process execute created '%s' with tid %d.\n", child->name, tid);
-  printf("Process execute sleep '%s' from child '%s' with sema at %p.\n", thread_name(), child->name, &child->sema_wait);
-  sema_down(&child->sema_wait);
+  // printf("Process execute created '%s' with tid %d.\n", child->name, tid);
+  // printf("Process execute sleep '%s' from child '%s' with sema at %p.\n", thread_name(), child->name, &child->sema_sleep);
+  sema_down(&child->sema_sleep);
 
-  printf("Process execute '%s' end!\n", thread_name());
+  // printf("Process execute '%s' end!\n", thread_name());
   return tid;
 }
 
@@ -65,7 +65,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  printf("Start process '%s' begin\n", thread_name());
+  // printf("Start process '%s' begin\n", thread_name());
 
   char *file_name = file_name_;
   struct intr_frame if_;
@@ -78,7 +78,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  printf("Load completed\n");
+  // printf("Load completed\n");
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -86,10 +86,10 @@ start_process (void *file_name_)
     thread_exit ();
 
   struct thread *t = thread_current();
-  printf("Start process wake parent for child '%s' with sema at %p.\n", thread_name(), &t->sema_wait);
-  sema_up(&t->sema_wait);
+  // printf("Start process wake parent for child '%s' with sema at %p.\n", thread_name(), &t->sema_sleep);
+  sema_up(&t->sema_sleep);
 
-  printf("Start process '%s' end\n", thread_name());
+  // printf("Start process '%s' end\n", thread_name());
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -112,79 +112,79 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  printf("Process wait begin\n");
-  printf("Thread %s waiting for tid %d.\n", thread_name(), child_tid);
-  while(1) {
-
-  }
-  /*
-  struct thread *parent = thread_current();
-  printf("Nisse Parent: %s\n", parent);
-  struct child_status *cs;
-  struct list_elem *e;  
-  for (e = list_begin (&parent->child_status_list); 
-    e != list_end (&parent->child_status_list); 
-    e = list_next (e))
-  {
-    struct child_status *child_status = list_entry (e, struct child_status, elem);
-    if (child_status->pid == child_tid) {
-      cs = child_status;
-    }
-  }
-
-  lock_acquire(&cs->l);
-  cs->ref_cnt--;
-  lock_release(&cs->l);
+  // printf("Process wait '%s' begin.\n", thread_name());
+  // printf("Process wait thread '%s' waiting for tid %d.\n", thread_name(), child_tid);
   
+  struct thread *parent = thread_current();
+  // printf("Process wait '%s' get child.\n", thread_name());
+  struct thread *child = get_child(parent, child_tid);
+  // printf("Process wait '%s' get child '%s'.\n", thread_name(), child->name);
+  struct child_status *cs = child->cs;
+
+  // printf("Process wait '%s' update child status.\n", thread_name());
+
+  lock_acquire(&child->cslock);
+  cs->ref_cnt--;
+  lock_release(&child->cslock);
+  
+  // printf("Proces wait '%s' child status is %d.\n", thread_name(), cs->ref_cnt);
+
   if(cs->ref_cnt != 0)
-    sema_down(&cs->sema_wait);
+    sema_down(&child->sema_wait);
+  // printf("Process exit sema_exit is %p.\n", &child->sema_exit);
+  sema_up(&child->sema_exit);
+  
+  timer_sleep(10);
 
   int exit_status = cs->exit_status;
-  list_remove(&cs->elem);
-  free(cs);
+  // printf("Proces wait '%s' exit code is %d.\n", thread_name(), exit_status);
   
-  printf("Process wait end\n");
+  free(cs);
+
+  // printf("Process wait '%s' end\n", thread_name());
   return exit_status;
-  */
 }
 
 /* Free the current process's resources. */
 void
 process_exit (void)
 {
-  printf("Process exit begin\n");
-  struct thread *cur = thread_current ();
+  // printf("Process exit '%s' begin\n", thread_name());
+  struct thread *t = thread_current();
   uint32_t *pd;
   
-  /*
-  struct child_status *cs = cur->cs;
-
-  lock_acquire(&cs->l);
+  struct child_status *cs = t->cs;
+  
+  // printf("Process exit update child status.\n");
+  // printf("Process exit lock %p.\n", &t->cslock);
+  lock_acquire(&t->cslock);
   cs->ref_cnt--;
-  cs->exit_status = cur->exit_status;
-  lock_release(&cs->l);
+  cs->exit_status = t->exit_status;
+  lock_release(&t->cslock);
+  // printf("Process exit child status is %d.\n", cs->ref_cnt);
 
-  // TODO: Free resources
+  // printf("Process exit sema_exit is %p.\n", &t->sema_exit);
 
   if(cs->ref_cnt == 0)
-    //sema_up(&cs->sema_wait);
-  */
+    sema_up(&t->sema_wait);
+  else
+    sema_down(&t->sema_exit);
 
-  printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+  printf("%s: exit(%d)\n", t->name, t->exit_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
-  pd = cur->pagedir;
+  pd = t->pagedir;
   if (pd != NULL) 
     {
       /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
+         t->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
          process page directory.  We must activate the base page
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-      cur->pagedir = NULL;
+      t->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
@@ -213,7 +213,7 @@ process_activate (void)
 typedef uint32_t Elf32_Word, Elf32_Addr, Elf32_Off;
 typedef uint16_t Elf32_Half;
 
-/* For use with ELF types in printf(). */
+/* For use with ELF types in // printf(). */
 #define PE32Wx PRIx32   /* Print Elf32_Word in hexadecimal. */
 #define PE32Ax PRIx32   /* Print Elf32_Addr in hexadecimal. */
 #define PE32Ox PRIx32   /* Print Elf32_Off in hexadecimal. */
@@ -282,7 +282,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  printf("Load begin\n");
+  // printf("Load begin\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -301,18 +301,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   }
 
-  printf("Start push arguments stack\n");
+  // printf("Start push arguments stack\n");
 
   /* Push arguments on stack. */
   char *argv[32];
   int argc = 0; 
   char *token, *save_ptr;
   char *cmdline = file_name;
-  printf("Filename: %s\n", file_name);
-  printf("CMD line: %s\n", cmdline);
+  // printf("Filename: %s\n", file_name);
+  // printf("CMD line: %s\n", cmdline);
 
   file_name = strtok_r(file_name, " ", &save_ptr);
-  printf("Filename: %s\n", file_name);
+  // printf("Filename: %s\n", file_name);
 
   /* Push argv values. */
   for (token = strtok_r (cmdline, " ", &save_ptr); token != NULL;
@@ -338,7 +338,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     *esp -= sizeof(argv[i]);
     memcpy(*esp, &argv[i], sizeof(argv[i]));
   } 
-  //printf("%s\n", "Text");
+  //// printf("%s\n", "Text");
 
   /* Push argv. */
   void* tmp = *esp;
@@ -355,10 +355,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Uncomment the following line to print some debug
     information. This will be useful when you debug the program
     stack.*/
-#define STACK_DEBUG
+//#define STACK_DEBUG
 
 #ifdef STACK_DEBUG
-  printf("*esp is %p\nstack contents:\n", *esp);
+  // printf("*esp is %p\nstack contents:\n", *esp);
   hex_dump((int)*esp , *esp, PHYS_BASE-*esp+16, true);
   /* The same information, only more verbose: */
   /* It prints every byte as if it was a char and every 32-bit aligned
@@ -394,7 +394,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      // printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
@@ -407,7 +407,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      // printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
 

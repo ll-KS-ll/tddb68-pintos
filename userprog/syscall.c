@@ -220,9 +220,8 @@ static void
 exit( void* esp )
 {
   int status = get_argument(esp, 0);
-  
-  //thread_current()->exit_status = status;
-
+  /* Set exit code. */
+  thread_current()->exit_status = status;
   /* Exit process. */
   thread_exit();
 }
