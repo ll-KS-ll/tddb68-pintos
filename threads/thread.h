@@ -97,8 +97,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct semaphore sema_wait;
-    int exit_status;
+    int exit_status;            /* Exit code for when terminating. */
+    struct semaphore sema_wait; /* Sleep and wake a perent process. */
+    struct list_elem celem;     /* List element for children. */ 
     struct list children_list;  /* Child status list for keeping exit statuses. */
     struct child_status *cs;
     #define FD_SIZE 128
@@ -110,13 +111,6 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-struct child
-  {
-    int pid;
-    struct semaphore sema_wait;
-
-    struct list_elem elem;
-  };
 
 /* Child status list item.*/
 struct child_status
@@ -162,6 +156,7 @@ void thread_unblock (struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
+struct thread *get_child (struct thread*, tid_t);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);

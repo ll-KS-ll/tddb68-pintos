@@ -30,13 +30,12 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  printf("Process execute begin!\n");
+  printf("Process execute '%s' begin!\n", thread_name());
   char *fn_copy;
   char *save_ptr;
   tid_t tid;
   
   struct thread *parent = thread_current();
-  printf("Parent: %s\n", parent->name);
   
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -50,12 +49,14 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-  struct child *child = (struct child*)malloc(sizeof(struct child*));
-  sema_init(&child->sema_wait, 0);
-  list_push_back(&parent->children_list, &child->elem);  
+  
+
+  struct thread *child = get_child(parent, tid);
+  printf("Process execute created '%s' with tid %d.\n", child->name, tid);
+  printf("Process execute sleep '%s' from child '%s' with sema at %p.\n", thread_name(), child->name, &child->sema_wait);
   sema_down(&child->sema_wait);
 
-  printf("Process execute end!\n");
+  printf("Process execute '%s' end!\n", thread_name());
   return tid;
 }
 
@@ -64,9 +65,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  printf("Start process begin\n");
-  struct thread *t = thread_current();
-  printf("Name: %s\n", t->name);
+  printf("Start process '%s' begin\n", thread_name());
 
   char *file_name = file_name_;
   struct intr_frame if_;
@@ -86,7 +85,11 @@ start_process (void *file_name_)
   if (!success) 
     thread_exit ();
 
+  struct thread *t = thread_current();
+  printf("Start process wake parent for child '%s' with sema at %p.\n", thread_name(), &t->sema_wait);
   sema_up(&t->sema_wait);
+
+  printf("Start process '%s' end\n", thread_name());
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -109,11 +112,12 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  printf("Process wait begin\n");
+  printf("Thread %s waiting for tid %d.\n", thread_name(), child_tid);
   while(1) {
 
   }
   /*
-  printf("Process wait begin\n");
   struct thread *parent = thread_current();
   printf("Nisse Parent: %s\n", parent);
   struct child_status *cs;
@@ -151,6 +155,8 @@ process_exit (void)
   printf("Process exit begin\n");
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  
+  /*
   struct child_status *cs = cur->cs;
 
   lock_acquire(&cs->l);
@@ -162,6 +168,7 @@ process_exit (void)
 
   if(cs->ref_cnt == 0)
     //sema_up(&cs->sema_wait);
+  */
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
@@ -319,14 +326,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
   }
   argv[argc] = 0;
 
-  /* Align */
-  // *esp -= Fuck align
+  /* Align with word size 4. */
+  uint8_t a = (size_t) *esp % 4;
+  if (a)
+    {
+      *esp -= a;
+      memcpy(*esp, &argv[argc], a);
+    }
 
   for (int i = argc; i >= 0; i--) {
     *esp -= sizeof(argv[i]);
     memcpy(*esp, &argv[i], sizeof(argv[i]));
   } 
-  printf("%s\n", "Text");
+  //printf("%s\n", "Text");
 
   /* Push argv. */
   void* tmp = *esp;
@@ -339,12 +351,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *esp -= sizeof(argv[argc]);
   memcpy(*esp, &argv[argc], sizeof(argv[argc]));
 
-  printf("Time for stack debug!\n");
 
-   /* Uncomment the following line to print some debug
-     information. This will be useful when you debug the program
-     stack.*/
-//#define STACK_DEBUG
+  /* Uncomment the following line to print some debug
+    information. This will be useful when you debug the program
+    stack.*/
+#define STACK_DEBUG
 
 #ifdef STACK_DEBUG
   printf("*esp is %p\nstack contents:\n", *esp);
