@@ -44,10 +44,10 @@ put_user (uint8_t *udst, uint8_t byte)
 
 /* Validate and return argument n. */
 static uint32_t
-get_argument(void* esp,  int argn)
+get_argument(void* esp, int argn)
 {
   uint32_t* argv = esp + (argn + 1) * 4;
-  if( get_user(argv + 3) != -1 && *argv != NULL) /* Test last byte of argument. */
+  if(get_user(argv + 3) != -1) /* Test last byte of argument. */
     return *argv;
   thread_current()->exit_status = -1;
   thread_exit();
@@ -69,6 +69,12 @@ create( void *esp )
   const char* name = get_argument(esp, 0);
   unsigned int size = get_argument(esp, 1);
   
+  /* Check for null arguments and bad pointers. */
+  if(name == NULL || !is_user_vaddr(name) || get_user(name) == -1) {
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+
   /* Try to create file. */
   bool status = filesys_create(name, size);
 
@@ -89,6 +95,13 @@ open( void *esp )
 
   /* Open file in filesystem. */
   const char* name = get_argument(esp, 0);
+  
+  /* Check for null arguments and bad pointers. */
+  if(name == NULL || !is_user_vaddr(name) || get_user(name) == -1) {
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+  
   struct file* f = filesys_open(name); 
   
   if (f == NULL) {  /* Couldn't open file with given name. */
