@@ -112,7 +112,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  // printf("Process wait '%s' begin.\n", thread_name());
+  //printf("Process wait '%s' begin.\n", thread_name());
   // printf("Process wait thread '%s' waiting for tid %d.\n", thread_name(), child_tid);
   
   struct thread *parent = thread_current();
@@ -127,17 +127,19 @@ process_wait (tid_t child_tid UNUSED)
   cs->ref_cnt--;
   lock_release(&child->cslock);
   
-  // printf("Proces wait '%s' child status is %d.\n", thread_name(), cs->ref_cnt);
+  // printf("Process wait '%s' child status is %d.\n", thread_name(), cs->ref_cnt);
 
   if(cs->ref_cnt != 0)
     sema_down(&child->sema_wait);
-  // printf("Process exit sema_exit is %p.\n", &child->sema_exit);
+  else
+    sema_up(&child->sema_exit);
+  // printf("Process wait sema_wait is %p.\n", &child->sema_wait);
   
-  sema_up(&child->sema_exit);
+  // printf("Process wait sema_exit is %p.\n", &child->sema_exit);
   thread_yield();
 
   int exit_status = cs->exit_status;
-  // printf("Proces wait '%s' exit code is %d.\n", thread_name(), exit_status);
+  // printf("Process wait '%s' exit code is %d.\n", thread_name(), exit_status);
   
   free(cs);
 
