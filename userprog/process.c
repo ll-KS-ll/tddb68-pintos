@@ -132,9 +132,9 @@ process_wait (tid_t child_tid UNUSED)
   if(cs->ref_cnt != 0)
     sema_down(&child->sema_wait);
   // printf("Process exit sema_exit is %p.\n", &child->sema_exit);
-  sema_up(&child->sema_exit);
   
-  timer_sleep(10);
+  sema_up(&child->sema_exit);
+  thread_yield();
 
   int exit_status = cs->exit_status;
   // printf("Proces wait '%s' exit code is %d.\n", thread_name(), exit_status);
@@ -307,15 +307,20 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *argv[32];
   int argc = 0; 
   char *token, *save_ptr;
-  char *cmdline = file_name;
+  char *fn_copy;
   // printf("Filename: %s\n", file_name);
   // printf("CMD line: %s\n", cmdline);
+
+  fn_copy = palloc_get_page (0);
+  if (fn_copy == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy, file_name, PGSIZE);
 
   file_name = strtok_r(file_name, " ", &save_ptr);
   // printf("Filename: %s\n", file_name);
 
   /* Push argv values. */
-  for (token = strtok_r (cmdline, " ", &save_ptr); token != NULL;
+  for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
       token = strtok_r (NULL, " ", &save_ptr))
   {
     *esp -= strlen(token) + 1;
@@ -326,7 +331,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   }
   argv[argc] = 0;
 
-  /* Align with word size 4. */
+  /* Align with word size 4. */ 
   uint8_t a = (size_t) *esp % 4;
   if (a)
     {
@@ -338,7 +343,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
     *esp -= sizeof(argv[i]);
     memcpy(*esp, &argv[i], sizeof(argv[i]));
   } 
-  //// printf("%s\n", "Text");
 
   /* Push argv. */
   void* tmp = *esp;
@@ -350,7 +354,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Push fake return address */
   *esp -= sizeof(argv[argc]);
   memcpy(*esp, &argv[argc], sizeof(argv[argc]));
-
 
   /* Uncomment the following line to print some debug
     information. This will be useful when you debug the program
