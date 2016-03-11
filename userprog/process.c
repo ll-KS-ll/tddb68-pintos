@@ -309,16 +309,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *token, *save_ptr;
   char *fn_copy;
   // printf("Filename: %s\n", file_name);
-  // printf("CMD line: %s\n", cmdline);
 
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  // printf("CMD line: %s\n", fn_copy);
+  
   file_name = strtok_r(file_name, " ", &save_ptr);
-  // printf("Filename: %s\n", file_name);
-
+   // printf("Filename: %s\n", file_name);
+   // printf("CMD line: %s\n", fn_copy);
+      
   /* Push argv values. */
   for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
       token = strtok_r (NULL, " ", &save_ptr))
@@ -339,7 +340,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       memcpy(*esp, &argv[argc], a);
     }
 
-  for (int i = argc; i >= 0; i--) {
+  for (i = argc; i >= 0; i--) {
     *esp -= sizeof(argv[i]);
     memcpy(*esp, &argv[i], sizeof(argv[i]));
   } 

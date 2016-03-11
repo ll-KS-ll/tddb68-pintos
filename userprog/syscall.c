@@ -49,6 +49,7 @@ get_argument(void* esp,  int argn)
   uint32_t* argv = esp + (argn + 1) * 4;
   if( get_user(argv + 3) != -1) /* Test last byte of argument. */
     return *argv;
+  thread_current()->exit_status = -1;
   thread_exit();
   NOT_REACHED();
 }
@@ -231,12 +232,26 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
   /* Get syscall number from stack. */
   int* esp = f->esp;
+  
   /* Check so pointers aren't in kernel memory. */
-  if(is_kernel_vaddr(esp)) {
-    printf("Process tried to access kernel memory through bad pointers in syscalls.\n");
+  if(!is_user_vaddr(esp) || !is_user_vaddr(esp + 1) || !is_user_vaddr(esp + 2) || !is_user_vaddr(esp + 3)) {
+    /* Exit process. */
+    thread_current()->exit_status = -1;
     thread_exit();
-    NOT_REACHED();
   }
+  
+  if(get_user(esp) == -1 || get_user(esp + 1) == -1 || get_user(esp + 2) == -1 || get_user(esp + 3) == -1){
+    /* Exit process. */
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+    
+  if(*esp < SYS_HALT || *esp > SYS_CLOSE) {
+    /* Exit process. */
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+  
   int sys_nr = *esp;
 
   switch(sys_nr) {
