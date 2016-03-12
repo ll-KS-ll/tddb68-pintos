@@ -51,6 +51,14 @@ process_execute (const char *file_name)
 
   fn_copy2 = strtok_r(fn_copy2, " ", &save_ptr);
   // printf("Process execute '%s' file name is '%s'.\n", thread_name(), file_name);
+
+  /* Best control if file exist in filesys ever. */
+  struct file *f = filesys_open(fn_copy2);
+  if(f == NULL)
+    return TID_ERROR;
+  else
+    file_close(f);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
