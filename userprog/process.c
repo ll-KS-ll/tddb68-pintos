@@ -134,6 +134,8 @@ process_wait (tid_t child_tid UNUSED)
   struct thread *parent = thread_current();
   // printf("Process wait '%s' get child.\n", thread_name());
   struct thread *child = get_child(parent, child_tid);
+  if(child == NULL) // Bad pid
+    return -1;
   // printf("Process wait '%s' get child '%s'.\n", thread_name(), child->name);
   struct child_status *cs = child->cs;
 
@@ -231,7 +233,7 @@ process_activate (void)
 typedef uint32_t Elf32_Word, Elf32_Addr, Elf32_Off;
 typedef uint16_t Elf32_Half;
 
-/* For use with ELF types in // // printf(). */
+/* For use with ELF types in printf(). */
 #define PE32Wx PRIx32   /* Print Elf32_Word in hexadecimal. */
 #define PE32Ax PRIx32   /* Print Elf32_Addr in hexadecimal. */
 #define PE32Ox PRIx32   /* Print Elf32_Off in hexadecimal. */
@@ -300,7 +302,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  // // printf("Load begin\n");
+  // printf("Load begin\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -326,17 +328,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int argc = 0; 
   char *token, *save_ptr;
   char *fn_copy;
-  // printf("Filename: %s\n", file_name);
 
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  // printf("CMD line: %s\n", fn_copy);
   
   file_name = strtok_r(file_name, " ", &save_ptr);
-  // printf("Filename: %s\n", file_name);
-  // printf("CMD line: %s\n", fn_copy);
       
   /* Push argv values. */
   for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
@@ -380,7 +378,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 //#define STACK_DEBUG
 
 #ifdef STACK_DEBUG
-  // printf("*esp is %p\nstack contents:\n", *esp);
+  printf("*esp is %p\nstack contents:\n", *esp);
   hex_dump((int)*esp , *esp, PHYS_BASE-*esp+16, true);
   /* The same information, only more verbose: */
   /* It prints every byte as if it was a char and every 32-bit aligned
@@ -416,7 +414,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      // printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
@@ -429,7 +427,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      // printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
 

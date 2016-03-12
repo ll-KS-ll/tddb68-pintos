@@ -300,19 +300,20 @@ struct thread *
 get_child (struct thread *parent, tid_t tid)
 {
   #ifdef USERPROG
-  //printf("Get child with tid %d from parent %s.\n", tid, parent->name);
   struct list_elem *e;
-  struct list *children = &parent->children_list; 
+  struct list *children = &parent->children_list;
+  
+  if(children->head.next == NULL)
+    return NULL;
+
   for (e = list_begin (children); e != list_end (children);
        e = list_next (e))
     {
       struct thread *c = list_entry (e, struct thread, celem);
-      //printf("Child: %s\n", c->name);
       if(c->tid == tid)
         return c;
     }
   #endif
-  printf("Couldn't retrieve child with tid %d for parent %s.\n", tid, parent->name);
   return NULL;
 }
 
