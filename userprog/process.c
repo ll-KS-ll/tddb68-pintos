@@ -30,11 +30,10 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  // printf("Process execute '%s' begin!\n", thread_name());
-  char *fn_copy;
+  // printf("Process execute '%s' from '%s' begin!\n", file_name, thread_name());
+  char *fn_copy, *fn_copy2;
   char *save_ptr;
   tid_t tid;
-  
   
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -43,11 +42,20 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  file_name = strtok_r(file_name, " ", &save_ptr);
+  fn_copy2 = palloc_get_page (0);
+  if (fn_copy2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy2, file_name, PGSIZE);
+
+  // printf("Process execute '%s' copied file_name.\n", thread_name());
+
+  fn_copy2 = strtok_r(fn_copy2, " ", &save_ptr);
+  // printf("Process execute '%s' file name is '%s'.\n", thread_name(), file_name);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  // printf("Process execute '%s' created child with tid %d.\n", thread_name, tid);
   
 
   struct thread *parent = thread_current();
@@ -112,7 +120,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  //printf("Process wait '%s' begin.\n", thread_name());
+  // printf("Process wait '%s' begin.\n", thread_name());
   // printf("Process wait thread '%s' waiting for tid %d.\n", thread_name(), child_tid);
   
   struct thread *parent = thread_current();
@@ -215,7 +223,7 @@ process_activate (void)
 typedef uint32_t Elf32_Word, Elf32_Addr, Elf32_Off;
 typedef uint16_t Elf32_Half;
 
-/* For use with ELF types in // printf(). */
+/* For use with ELF types in // // printf(). */
 #define PE32Wx PRIx32   /* Print Elf32_Word in hexadecimal. */
 #define PE32Ax PRIx32   /* Print Elf32_Addr in hexadecimal. */
 #define PE32Ox PRIx32   /* Print Elf32_Off in hexadecimal. */
@@ -284,7 +292,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  // printf("Load begin\n");
+  // // printf("Load begin\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -319,8 +327,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // printf("CMD line: %s\n", fn_copy);
   
   file_name = strtok_r(file_name, " ", &save_ptr);
-   // printf("Filename: %s\n", file_name);
-   // printf("CMD line: %s\n", fn_copy);
+  // printf("Filename: %s\n", file_name);
+  // printf("CMD line: %s\n", fn_copy);
       
   /* Push argv values. */
   for (token = strtok_r (fn_copy, " ", &save_ptr); token != NULL;
