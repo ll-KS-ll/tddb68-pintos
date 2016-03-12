@@ -152,6 +152,7 @@ process_wait (tid_t child_tid UNUSED)
   else
     sema_up(&child->sema_exit);
   // printf("Process wait sema_wait is %p.\n", &child->sema_wait);
+  list_remove(&child->celem);
   
   // printf("Process wait sema_exit is %p.\n", &child->sema_exit);
   thread_yield();
