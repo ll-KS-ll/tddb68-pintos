@@ -146,13 +146,13 @@ process_wait (tid_t child_tid UNUSED)
   lock_release(&child->cslock);
   
   // printf("Process wait '%s' child status is %d.\n", thread_name(), cs->ref_cnt);
+  struct list_elem celem = child->celem;
 
   if(cs->ref_cnt != 0)
     sema_down(&child->sema_wait);
   else
     sema_up(&child->sema_exit);
   // printf("Process wait sema_wait is %p.\n", &child->sema_wait);
-  list_remove(&child->celem);
   
   // printf("Process wait sema_exit is %p.\n", &child->sema_exit);
   thread_yield();
@@ -161,7 +161,7 @@ process_wait (tid_t child_tid UNUSED)
   // printf("Process wait '%s' exit code is %d.\n", thread_name(), exit_status);
   
   free(cs);
-
+  list_remove(&celem);
   // printf("Process wait '%s' end\n", thread_name());
   return exit_status;
 }
