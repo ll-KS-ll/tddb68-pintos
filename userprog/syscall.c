@@ -61,6 +61,15 @@ halt( void )
   power_off();
 }
 
+/* Check for null arguments and bad pointers. */
+static void
+validate_pointer(char *c) {
+  if(c == NULL || !is_user_vaddr(c) || get_user(c) == -1) {
+    thread_current()->exit_status = -1;
+    thread_exit();
+  }
+}
+
 /* Execute system call create. */
 static bool
 create( void *esp )
@@ -70,10 +79,7 @@ create( void *esp )
   unsigned int size = get_argument(esp, 1);
   
   /* Check for null arguments and bad pointers. */
-  if(name == NULL || !is_user_vaddr(name) || get_user(name) == -1) {
-    thread_current()->exit_status = -1;
-    thread_exit();
-  }
+  validate_pointer(name);
 
   /* Try to create file. */
   bool status = filesys_create(name, size);
@@ -97,10 +103,7 @@ open( void *esp )
   const char* name = get_argument(esp, 0);
   
   /* Check for null arguments and bad pointers. */
-  if(name == NULL || !is_user_vaddr(name) || get_user(name) == -1) {
-    thread_current()->exit_status = -1;
-    thread_exit();
-  }
+  validate_pointer(name);
   
   struct file* f = filesys_open(name); 
   
@@ -131,6 +134,8 @@ write(void *esp)
   int fd = get_argument(esp, 0);
   const void* buffer = get_argument(esp, 1);
   unsigned int size = get_argument(esp, 2);
+
+  validate_pointer(buffer);
 
   if(fd == STDOUT_FILENO) {
     int n = size;
@@ -167,6 +172,8 @@ read( void *esp )
   int fd = get_argument(esp, 0);
   uint8_t* buf = get_argument(esp, 1);
   unsigned int size = get_argument(esp, 2);
+
+  validate_pointer(buf);  
 
   if (fd == STDIN_FILENO) {
     int n = 0;
@@ -216,6 +223,7 @@ static int
 exec( void* esp )
 {
   const char* cmd_line = get_argument(esp, 0);
+  validate_pointer(cmd_line);
   int pid = process_execute(cmd_line);
   return pid;
 }
