@@ -62,6 +62,10 @@ void
 inode_init (void) 
 {
   list_init (&open_inodes);
+  sema_init(&mutex, 1);
+  sema_init(&wrt, 1);
+  readcount = 0;
+  lock_init(&flock);
 }
 
 /* Initializes an inode with LENGTH bytes of data and

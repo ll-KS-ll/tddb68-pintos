@@ -4,8 +4,14 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/disk.h"
+#include "threads/synch.h"
 
 struct bitmap;
+
+struct semaphore mutex;
+struct semaphore wrt;
+struct lock flock;
+int readcount;
 
 void inode_init (void);
 bool inode_create (disk_sector_t, off_t);

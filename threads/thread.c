@@ -95,6 +95,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  list_init (&initial_thread->children_list);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -183,8 +184,6 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  // printf("Thread create new: %s\n", t->name);
-
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -201,9 +200,9 @@ thread_create (const char *name, int priority,
 
   #ifdef USERPROG
     struct thread *parent = thread_current();
-    list_init (&parent->children_list); /* Init threads children list. */
+    list_init (&t->children_list);
     list_push_back(&parent->children_list, &t->celem);
-    
+
     sema_init (&t->sema_sleep, 0);  /* Init semaphore for sleeping parents. */
     sema_init (&t->sema_wait, 0);  /* Init semaphore for sleeping parents. */
     sema_init (&t->sema_exit, 0);  /* Init semaphore for sleeping parents. */

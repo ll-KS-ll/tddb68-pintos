@@ -45,12 +45,14 @@ file_reopen (struct file *file)
 void
 file_close (struct file *file) 
 {
+  lock_acquire(&flock);
   if (file != NULL)
     {
       file_allow_write (file);
       inode_close (file->inode);
       free (file); 
     }
+  lock_release(&flock);
 }
 
 /* Returns the inode encapsulated by FILE. */
@@ -68,8 +70,21 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
-  off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
+  off_t bytes_read;
+  
+  sema_down(&mutex);
+  readcount++;
+  if (readcount == 1) sema_down(&wrt);
+  sema_up(&mutex);
+  
+  bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_read;
+  
+  sema_down(&mutex);
+  readcount--;
+  if (readcount == 0) sema_up(&wrt);
+  sema_up(&mutex);
+
   return bytes_read;
 }
 
@@ -81,7 +96,21 @@ file_read (struct file *file, void *buffer, off_t size)
 off_t
 file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs) 
 {
-  return inode_read_at (file->inode, buffer, size, file_ofs);
+  off_t bytes_read;
+
+  sema_down(&mutex);
+  readcount++;
+  if (readcount == 1) sema_down(&wrt);
+  sema_up(&mutex);
+
+  bytes_read = inode_read_at (file->inode, buffer, size, file_ofs);
+
+  sema_down(&mutex);
+  readcount--;
+  if (readcount == 0) sema_up(&wrt);
+  sema_up(&mutex);
+
+  return bytes_read;
 }
 
 /* Writes SIZE bytes from BUFFER into FILE,
@@ -94,8 +123,13 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
 off_t
 file_write (struct file *file, const void *buffer, off_t size) 
 {
-  off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
+  off_t bytes_written;
+  sema_down(&wrt);
+  
+  bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_written;
+  
+  sema_up(&wrt);
   return bytes_written;
 }
 
@@ -110,7 +144,14 @@ off_t
 file_write_at (struct file *file, const void *buffer, off_t size,
                off_t file_ofs) 
 {
-  return inode_write_at (file->inode, buffer, size, file_ofs);
+  off_t bytes_written;
+  sema_down(&wrt);
+  
+  bytes_written = inode_write_at (file->inode, buffer, size, file_ofs);
+  file->pos += bytes_written;
+  
+  sema_up(&wrt);
+  return bytes_written;
 }
 
 /* Prevents write operations on FILE's underlying inode

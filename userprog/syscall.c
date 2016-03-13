@@ -105,7 +105,7 @@ open( void *esp )
   /* Check for null arguments and bad pointers. */
   validate_pointer(name);
   
-  struct file* f = filesys_open(name); 
+  struct file* f = filesys_open(name);
   
   if (f == NULL) {  /* Couldn't open file with given name. */
     bitmap_reset(t->fd_bitmap, fd); /* Reset unused file descriptor. */  
@@ -149,6 +149,8 @@ write(void *esp)
     putbuf(buffer, n);    
   
     return size;
+  } else if (fd == STDIN_FILENO) {
+    return -1; // Can't write to read from console.
   } else {  // Write to file with fd.
     /* File descriptors 0 & 1 are reserved for console. Skip those.*/
     fd -= 2; 
@@ -157,11 +159,9 @@ write(void *esp)
     if(!valid_fd(fd))
       return -1;
 
-    /* Write to file with file descriptor fd. */
     struct file* f = thread_current()->files[fd];
     return file_write(f, buffer, size);
   }
-
 }
 
 /* Execute system call read. */
@@ -185,18 +185,86 @@ read( void *esp )
     }
     
     return n;
+  } else if (fd == STDOUT_FILENO) {
+    return -1; // Can't read from write to console.
   } else {
     /* File descriptors 0 & 1 are reserved for console. Skip those.*/
     fd -= 2; 
-
     /* Control file descriptor. */
     if(!valid_fd(fd))
       return -1;
-
-    /* Read from file with file descriptor fd. */
+    
     struct file* f = thread_current()->files[fd];
     return file_read(f, buf, size);
   }
+}
+
+/* Execute system call seek. */
+static void
+seek( void *esp )
+{
+  /* Get arguments. */
+  int fd = get_argument(esp, 0);
+  unsigned position = get_argument(esp, 1);
+  /* File descriptors 0 & 1 are reserved for console. Skip those.*/
+  fd -= 2; 
+  /* Control file descriptor. */
+  if(!valid_fd(fd))
+    return -1;
+
+  struct file* f = thread_current()->files[fd];
+  file_seek(f, position);
+}
+
+/* Execute system call tell. */
+static unsigned
+tell( void *esp )
+{
+  /* Get arguments. */
+  int fd = get_argument(esp, 0);
+  /* File descriptors 0 & 1 are reserved for console. Skip those.*/
+  fd -= 2; 
+  /* Control file descriptor. */
+  if(!valid_fd(fd))
+    return -1;
+
+  unsigned pos = -1;
+  struct file* f = thread_current()->files[fd];
+  pos = file_tell(f);
+
+  return pos;
+}
+
+/* Execute system call filesize. */
+static int
+filesize( void *esp ){
+  int fd = get_argument(esp, 0);
+  /* File descriptors 0 & 1 are reserved for console. Skip those.*/
+  fd -= 2; 
+  /* Control file descriptor. */
+  if(!valid_fd(fd))
+    return -1;
+
+  unsigned size = -1;
+  struct file* f = thread_current()->files[fd];
+  size = file_length(f);
+
+  return size;
+}
+
+/* Execute system call close. */
+static bool
+remove( void *esp )
+{
+  /* Get arguments. */
+  const char* name = get_argument(esp, 0);
+
+  validate_pointer(name);
+
+  bool success = false;
+  success = filesys_remove(name);
+
+  return success;
 }
 
 /* Execute system call close. */
@@ -267,14 +335,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     thread_exit();
   }
     
-  if(*esp < SYS_HALT || *esp > SYS_CLOSE) {
+  if(*esp < SYS_HALT || *esp > SYS_REMOVE) {
     /* Exit process. */
     thread_current()->exit_status = -1;
     thread_exit();
   }
   
   int sys_nr = *esp;
-
   switch(sys_nr) {
     case SYS_HALT: // Shutdown machine
       halt();
@@ -295,6 +362,22 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_READ: // Read from file or console.
       f->eax = read(esp);
+      break;
+
+    case SYS_SEEK:  // Seek to a position in a file.
+      seek(esp);
+      break;
+
+    case SYS_TELL:  // Tell a position in a file.
+      f->eax = tell(esp);
+      break;
+
+    case SYS_FILESIZE:  // Get size of a file.
+      f->eax = filesize(esp);
+      break;
+
+    case SYS_REMOVE:  // Remove a file from file system.
+      f->eax = remove(esp);
       break;
 
     case SYS_CLOSE: // Close file.
