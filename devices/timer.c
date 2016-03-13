@@ -108,8 +108,12 @@ timer_sleep (int64_t ticks)
   sleepy->ticks = ticks;
   sleepy->start = timer_ticks ();
   sleepy->sema = s;
+  
+  intr_disable();
 
   list_push_back (&sleeper_list, &sleepy->elem); /* Add sleeper to sleeper list. */ 
+  
+  intr_enable();
   
   sema_down (sleepy->sema); //zzz...
 
