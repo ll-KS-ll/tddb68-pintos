@@ -329,16 +329,15 @@ thread_exit (void)
   size_t fd;
   struct thread *t = thread_current(); 
   struct bitmap *bm = t->fd_bitmap;
-  while(1) {
+  while(1 && bm != NULL) {
     fd = bitmap_scan_and_flip(bm, 0, 1, 1);
     if(fd == BITMAP_ERROR)
       break;
     file_close(t->files[fd]);
   }
+  if(bm != NULL) bitmap_destroy(bm);
 
   process_exit ();
-  
-  bitmap_destroy(thread_current ()->fd_bitmap);
 #endif
 
   /* Just set our status to dying and schedule another process.

@@ -92,18 +92,16 @@ create( void *esp )
 static int
 open( void *esp )
 {
+  /* Open file in filesystem. */
+  const char* name = get_argument(esp, 0);
+  /* Check for null arguments and bad pointers. */
+  validate_pointer(name);
+  
   /* Create file descriptor. */
   struct thread* t = thread_current();
   int fd = bitmap_scan_and_flip(t->fd_bitmap, 0, 1, 0); 
-
   if (fd == BITMAP_ERROR) /* Couldn't find a free file descriptor. */
     return -1;            /* Can't open file. */
-
-  /* Open file in filesystem. */
-  const char* name = get_argument(esp, 0);
-  
-  /* Check for null arguments and bad pointers. */
-  validate_pointer(name);
   
   struct file* f = filesys_open(name);
   
@@ -272,7 +270,7 @@ static void
 close( void *esp )
 {
   /* Get arguments. */
-  int fd = get_argument(esp, 0);
+  int fd = get_argument(esp, 0) - 2;
 
   /* Validate file descriptor. */
   if(!valid_fd(fd)) return;

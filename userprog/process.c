@@ -178,20 +178,20 @@ process_exit (void)
   
   // printf("Process exit update child status.\n");
   // printf("Process exit lock %p.\n", &t->cslock);
-  lock_acquire(&t->cslock);
-  cs->ref_cnt--;
-  cs->exit_status = t->exit_status;
-  lock_release(&t->cslock);
-  // printf("Process exit child status is %d.\n", cs->ref_cnt);
+  if (t->cs != NULL) {
+    lock_acquire(&t->cslock);
+    cs->ref_cnt--;
+    cs->exit_status = t->exit_status;
+    lock_release(&t->cslock);
 
-  // printf("Process exit sema_exit is %p.\n", &t->sema_exit);
+    if(cs->ref_cnt == 0)
+      sema_up(&t->sema_wait);
+    else
+      sema_down(&t->sema_exit);
+    
+    printf("%s: exit(%d)\n", t->name, t->exit_status);
+  }
 
-  if(cs->ref_cnt == 0)
-    sema_up(&t->sema_wait);
-  else
-    sema_down(&t->sema_exit);
-
-  printf("%s: exit(%d)\n", t->name, t->exit_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
