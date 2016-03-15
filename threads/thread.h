@@ -101,7 +101,8 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;            /* Exit code for when terminating. */
     
-    struct semaphore sema_exec;/* Sleep and wake thread. */
+    struct semaphore sema_exec; /* Sleep and wake thread. */
+    bool load_success;         /* Did process load successfully. */
     struct child_status *cs;    /* Child status to use with parent for exit code. */
     struct list cs_list;        /* List of child statuses. */
     struct lock cs_lock;        /* Lock for accessing cs_list. */
