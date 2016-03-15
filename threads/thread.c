@@ -25,6 +25,9 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* List of all created threads. */
+static struct list threads_list;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -89,13 +92,19 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&sleeper_list); /* Init the sleeper list for sleeping threads. */
+  list_init (&threads_list); /* Init the sleeper list for sleeping threads. */
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  list_init (&initial_thread->children_list);
+
+#ifdef USERPROG
+  list_init (&initial_thread->cs_list);
+  lock_init (&initial_thread->cs_lock);
+#endif
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -164,9 +173,6 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux) 
 {
-  // printf("Thread create begin!\n");
-  // printf("Thread create current: %s\n", thread_name());
-
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -198,29 +204,40 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
 
-  #ifdef USERPROG
-    struct thread *parent = thread_current();
-    list_init (&t->children_list);
-    list_push_back(&parent->children_list, &t->celem);
+  enum intr_level old_level = intr_disable ();
+  list_push_back (&threads_list, &t->t_elem);
+  intr_set_level (old_level);
 
-    sema_init (&t->sema_sleep, 0);  /* Init semaphore for sleeping parents. */
-    sema_init (&t->sema_wait, 0);  /* Init semaphore for sleeping parents. */
-    sema_init (&t->sema_exit, 0);  /* Init semaphore for sleeping parents. */
-  	t->exit_status = 0;            /* Init exit status to ok (0). */
-    lock_init(&t->cslock);
-    
-    struct child_status *cs = (struct child_status*)malloc(sizeof(struct child_status*));
-    cs->ref_cnt = 2;
-    t->cs = cs;
+  #ifdef USERPROG
     t->fd_bitmap = bitmap_create (FD_SIZE);
-  	if (t->fd_bitmap == NULL)
-  		PANIC("FD bitmap is too big! :s");
+    if (t->fd_bitmap == NULL)
+      PANIC("FD bitmap is too big! :s");
+
+    /* Allocate and initilize a child status. */
+    struct child_status *cs = (struct child_status *)malloc(sizeof(struct child_status));
+    cs->pid = tid;
+    cs->ref_cnt = 2;
+    cs->exit_status = -1;
+    lock_init(&cs->l);
+    sema_init(&cs->sema_wait, 0);
+
+    /* Initilize child status for child. */
+    list_init(&t->cs_list);
+    t->cs = cs;
+    t->exit_status = 0;            /* Init exit status to ok (0). */
+    sema_init (&t->sema_exec, 0);
+    lock_init(&t->cs_lock);
+  
+    /* Update parent with new child status. */
+    struct thread *parent = thread_current();
+    lock_acquire(&parent->cs_lock);
+    list_push_back(&parent->cs_list, &cs->cs_elem);
+    lock_release(&parent->cs_lock);
   #endif
 
   /* Add to run queue. */
   thread_unblock (t);
 
-  // printf("Thread create end!\n");
   return tid;
 }
 
@@ -296,23 +313,16 @@ thread_tid (void)
 }
 
 struct thread *
-get_child (struct thread *parent, tid_t tid)
+get_thread (tid_t tid)
 {
-  #ifdef USERPROG
   struct list_elem *e;
-  struct list *children = &parent->children_list;
-  
-  if(children->head.next == NULL)
-    return NULL;
-
-  for (e = list_begin (children); e != list_end (children);
+  for (e = list_begin (&threads_list); e != list_end (&threads_list);
        e = list_next (e))
     {
-      struct thread *c = list_entry (e, struct thread, celem);
-      if(c->tid == tid)
-        return c;
+      struct thread *t = list_entry (e, struct thread, t_elem);
+      if(t->tid == tid)
+        return t;
     }
-  #endif
   return NULL;
 }
 
@@ -343,6 +353,7 @@ thread_exit (void)
   /* Just set our status to dying and schedule another process.
      We will be destroyed during the call to schedule_tail(). */
   intr_disable ();
+  list_remove (&thread_current ()->t_elem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();

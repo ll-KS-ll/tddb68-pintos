@@ -94,17 +94,18 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    struct list_elem t_elem;    /* List element for threads list. */
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     int exit_status;            /* Exit code for when terminating. */
-    struct semaphore sema_sleep;/* Sleep and wake thread. */
-    struct semaphore sema_wait; /* Sleep and wake process wait. */
-    struct semaphore sema_exit; /* Sleep and wake process exit. */
-    struct list_elem celem;     /* List element for children. */ 
-    struct list children_list;  /* List of children of this thread. */
+    
+    struct semaphore sema_exec;/* Sleep and wake thread. */
     struct child_status *cs;    /* Child status to use with parent for exit code. */
-    struct lock cslock;         /* Lock for modifying child status. */
+    struct list cs_list;        /* List of child statuses. */
+    struct lock cs_lock;        /* Lock for accessing cs_list. */
+
     #define FD_SIZE 128
     struct bitmap * fd_bitmap;    /* Bitmap of open file discriptors. */
     struct file* files[FD_SIZE];  /* Pointers to opened files. */ 
@@ -114,15 +115,18 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-
 /* Child status list item.*/
 struct child_status
   {
+    int pid;
     int ref_cnt;
     int exit_status;
+    
+    struct semaphore sema_wait; /* Sleep and wake process wait. */
+    struct lock l; // Lock for modifying child status.
 
-    struct list_elem elem;
-  };  
+    struct list_elem cs_elem;
+  }; 
 
 
 /* Sleeper list item. */
@@ -158,7 +162,7 @@ void thread_unblock (struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
-struct thread *get_child (struct thread*, tid_t);
+struct thread *get_thread (tid_t);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);

@@ -30,7 +30,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  // printf("Process execute '%s' from '%s' begin!\n", file_name, thread_name());
   char *fn_copy, *fn_copy2;
   char *save_ptr;
   tid_t tid;
@@ -47,10 +46,7 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy2, file_name, PGSIZE);
 
-  // printf("Process execute '%s' copied file_name.\n", thread_name());
-
   fn_copy2 = strtok_r(fn_copy2, " ", &save_ptr);
-  // printf("Process execute '%s' file name is '%s'.\n", thread_name(), file_name);
 
   /* Best control if file exist in filesys ever. */
   struct file *f = filesys_open(fn_copy2);
@@ -63,16 +59,9 @@ process_execute (const char *file_name)
   tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-  // printf("Process execute '%s' created child with tid %d.\n", thread_name, tid);
-  
 
-  struct thread *parent = thread_current();
-  struct thread *child = get_child(parent, tid);
-  // printf("Process execute created '%s' with tid %d.\n", child->name, tid);
-  // printf("Process execute sleep '%s' from child '%s' with sema at %p.\n", thread_name(), child->name, &child->sema_sleep);
-  sema_down(&child->sema_sleep);
+  sema_down(&get_thread (tid)->sema_exec);
 
-  // printf("Process execute '%s' end!\n", thread_name());
   return tid;
 }
 
@@ -81,8 +70,6 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  // printf("Start process '%s' begin\n", thread_name());
-
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -94,18 +81,13 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  // printf("Load completed\n");
-
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
-  struct thread *t = thread_current();
-  // printf("Start process wake parent for child '%s' with sema at %p.\n", thread_name(), &t->sema_sleep);
-  sema_up(&t->sema_sleep);
+  sema_up(&thread_current ()->sema_exec);
 
-  // printf("Start process '%s' end\n", thread_name());
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -128,41 +110,41 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  // printf("Process wait '%s' begin.\n", thread_name());
-  // printf("Process wait thread '%s' waiting for tid %d.\n", thread_name(), child_tid);
-  
   struct thread *parent = thread_current();
-  // printf("Process wait '%s' get child.\n", thread_name());
-  struct thread *child = get_child(parent, child_tid);
-  if(child == NULL) // Bad pid
-    return -1;
-  // printf("Process wait '%s' get child '%s'.\n", thread_name(), child->name);
-  struct child_status *cs = child->cs;
-
-  // printf("Process wait '%s' update child status.\n", thread_name());
-
-  lock_acquire(&child->cslock);
-  cs->ref_cnt--;
-  lock_release(&child->cslock);
   
-  // printf("Process wait '%s' child status is %d.\n", thread_name(), cs->ref_cnt);
-  struct list_elem celem = child->celem;
-
-  if(cs->ref_cnt != 0)
-    sema_down(&child->sema_wait);
-  else
-    sema_up(&child->sema_exit);
-  // printf("Process wait sema_wait is %p.\n", &child->sema_wait);
+  /* Get child status for child with pid child_tid. */
+  bool found = false;
+  struct list_elem *e;
+  struct child_status *cs;
+  struct list *cs_list = &parent->cs_list; 
+  lock_acquire(&parent->cs_lock);
+  for (e = list_begin (cs_list); 
+    e != list_end (cs_list) && !found;
+    e = list_next (e))
+  {
+    struct child_status *c = list_entry (e, struct child_status, cs_elem);
+    
+    if(c->pid == child_tid){
+      cs = c;
+      found = true;
+    } 
+  }
+  lock_release(&parent->cs_lock);
   
-  // printf("Process wait sema_exit is %p.\n", &child->sema_exit);
-  thread_yield();
+  /* Couldn't find child status with pid, bad pid.*/
+  if(!found) return -1;
 
+  lock_acquire(&parent->cs_lock);
+  list_remove(&cs->cs_elem);
+  lock_release(&parent->cs_lock);
+
+  if(cs->ref_cnt != 1) {
+    sema_down(&cs->sema_wait);
+  }
+  
   int exit_status = cs->exit_status;
-  // printf("Process wait '%s' exit code is %d.\n", thread_name(), exit_status);
-  
   free(cs);
-  list_remove(&celem);
-  // printf("Process wait '%s' end\n", thread_name());
+  
   return exit_status;
 }
 
@@ -170,28 +152,43 @@ process_wait (tid_t child_tid UNUSED)
 void
 process_exit (void)
 {
-  // printf("Process exit '%s' begin\n", thread_name());
   struct thread *t = thread_current();
   uint32_t *pd;
   
+  /* Check if parent is dead. */
   struct child_status *cs = t->cs;
-  
-  // printf("Process exit update child status.\n");
-  // printf("Process exit lock %p.\n", &t->cslock);
   if (t->cs != NULL) {
-    lock_acquire(&t->cslock);
+    lock_acquire(&cs->l);
     cs->ref_cnt--;
     cs->exit_status = t->exit_status;
-    lock_release(&t->cslock);
+    lock_release(&cs->l);
 
-    if(cs->ref_cnt == 0)
-      sema_up(&t->sema_wait);
-    else
-      sema_down(&t->sema_exit);
-    
-    printf("%s: exit(%d)\n", t->name, t->exit_status);
+    if(cs->ref_cnt == 0) {
+      free(cs);
+    } else {
+      sema_up(&cs->sema_wait);
+    }
   }
 
+  /* Check if any children are dead. */
+  struct list_elem *e;
+  lock_acquire(&t->cs_lock);
+  for (e = list_begin (&t->cs_list); e != list_end (&t->cs_list);
+    e = list_next (e))
+  {
+    struct child_status *cs = list_entry (e, struct child_status, cs_elem);
+
+    lock_acquire(&cs->l);
+    cs->ref_cnt--;
+    lock_release(&cs->l);
+
+    if(cs->ref_cnt == 0) {
+      free(cs);
+    }
+  }
+  lock_release(&t->cs_lock);
+
+  printf("%s: exit(%d)\n", t->name, t->exit_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -303,7 +300,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-  // printf("Load begin\n");
+  // printf("[DEBUG] Load begin\n");
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -321,8 +318,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp)){
     goto done;
   }
-
-  // printf("Start push arguments stack\n");
 
   /* Push arguments on stack. */
   char *argv[32];
@@ -411,6 +406,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   }
 #endif
 
+  // printf("[DEBUG] Open executable '%s'.\n", file_name);
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -418,6 +414,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  // printf("[DEBUG] Executable '%s' opened.\n", file_name);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -490,6 +488,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
+
+  // printf("[DEBUG] Executable '%s' validated and loaded.\n", file_name);
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
