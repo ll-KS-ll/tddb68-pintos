@@ -353,7 +353,8 @@ thread_exit (void)
   /* Just set our status to dying and schedule another process.
      We will be destroyed during the call to schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current ()->t_elem);
+  if (list_size (&threads_list) > 1)
+    list_remove (&thread_current ()->t_elem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
