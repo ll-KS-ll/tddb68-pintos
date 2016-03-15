@@ -64,13 +64,18 @@ halt( void )
 /* Check for null arguments and bad pointers. */
 static void
 validate_pointer(char *c, unsigned int size) {
-  int n;
-  for(n = 0; n < size; n++) {
-    if((*c+n) == NULL || !is_user_vaddr((*c+n)) || get_user((*c+n)) == -1) {
-      thread_current()->exit_status = -1;
-      thread_exit();
-      break;
+  if (size == 0) {
+    if(c == NULL || !is_user_vaddr(c) || get_user(c) == -1) {
+       thread_current()->exit_status = -1;
+       thread_exit();
     }
+  } else {
+    int n;
+    for(n = 0; n < size; n++) {
+      if(c+n == NULL || !is_user_vaddr(c+n) || get_user(c+n) == -1) {
+        thread_current()->exit_status = -1;
+        thread_exit();
+      }
   }
 }
 
