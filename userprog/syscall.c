@@ -76,6 +76,7 @@ validate_pointer(char *c, unsigned int size) {
         thread_current()->exit_status = -1;
         thread_exit();
       }
+    }
   }
 }
 
