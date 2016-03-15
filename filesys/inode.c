@@ -66,6 +66,10 @@ inode_init (void)
   sema_init(&wrt, 1);
   readcount = 0;
   lock_init(&flock);
+  lock_init(&create_lock);
+  lock_init(&remove_lock);
+  lock_init(&read_lock);
+  lock_init(&write_lock);
 }
 
 /* Initializes an inode with LENGTH bytes of data and
@@ -76,6 +80,7 @@ inode_init (void)
 bool
 inode_create (disk_sector_t sector, off_t length)
 {
+  lock_acquire(&create_lock);
   struct inode_disk *disk_inode = NULL;
   bool success = false;
 
@@ -106,6 +111,7 @@ inode_create (disk_sector_t sector, off_t length)
         } 
       free (disk_inode);
     }
+  lock_release(&create_lock);
   return success;
 }
 
@@ -197,8 +203,10 @@ inode_close (struct inode *inode)
 void
 inode_remove (struct inode *inode) 
 {
+  lock_acquire(&remove_lock);
   ASSERT (inode != NULL);
   inode->removed = true;
+  lock_release(&remove_lock);
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
@@ -207,6 +215,7 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
+  lock_acquire(&read_lock);
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
@@ -252,7 +261,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       bytes_read += chunk_size;
     }
   free (bounce);
-
+  lock_release(&read_lock);
   return bytes_read;
 }
 
@@ -265,6 +274,7 @@ off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
 {
+  lock_acquire(&write_lock);
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
@@ -320,7 +330,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
   free (bounce);
-
+  lock_release(&write_lock);
   return bytes_written;
 }
 

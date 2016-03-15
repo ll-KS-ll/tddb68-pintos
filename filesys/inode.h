@@ -8,6 +8,11 @@
 
 struct bitmap;
 
+static struct lock create_lock;
+static struct lock remove_lock;
+static struct lock read_lock;
+static struct lock write_lock;
+
 struct semaphore mutex;
 struct semaphore wrt;
 struct lock flock;

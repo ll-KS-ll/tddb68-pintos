@@ -11,7 +11,6 @@
 
 /* Disk used for file system. */
 extern struct disk *filesys_disk;
-
 static struct lock file_lock;
 
 void filesys_init (bool format);
