@@ -189,7 +189,8 @@ process_exit (void)
   }
   lock_release(&t->cs_lock);
 
-  printf("%s: exit(%d)\n", t->name, t->exit_status);
+  if (t->load_success)
+    printf("%s: exit(%d)\n", t->name, t->exit_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
