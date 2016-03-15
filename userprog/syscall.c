@@ -63,10 +63,14 @@ halt( void )
 
 /* Check for null arguments and bad pointers. */
 static void
-validate_pointer(char *c) {
-  if(c == NULL || !is_user_vaddr(c) || get_user(c) == -1) {
-    thread_current()->exit_status = -1;
-    thread_exit();
+validate_pointer(char *c, unsigned int size) {
+  int n;
+  for(n = 0; n < size; n++) {
+    if((*c+n) == NULL || !is_user_vaddr((*c+n)) || get_user((*c+n)) == -1) {
+      thread_current()->exit_status = -1;
+      thread_exit();
+      break;
+    }
   }
 }
 
@@ -79,7 +83,7 @@ create( void *esp )
   unsigned int size = get_argument(esp, 1);
   
   /* Check for null arguments and bad pointers. */
-  validate_pointer(name);
+  validate_pointer(name, size);
 
   /* Try to create file. */
   bool status = filesys_create(name, size);
@@ -95,7 +99,7 @@ open( void *esp )
   /* Open file in filesystem. */
   const char* name = get_argument(esp, 0);
   /* Check for null arguments and bad pointers. */
-  validate_pointer(name);
+  validate_pointer(name, 14); // Filename is maximum of 14 chars.
   
   /* Create file descriptor. */
   struct thread* t = thread_current();
@@ -133,7 +137,7 @@ write(void *esp)
   const void* buffer = get_argument(esp, 1);
   unsigned int size = get_argument(esp, 2);
 
-  validate_pointer(buffer);
+  validate_pointer(buffer, size);
 
   if(fd == STDOUT_FILENO) {
     int n = size;
@@ -171,7 +175,7 @@ read( void *esp )
   uint8_t* buf = get_argument(esp, 1);
   unsigned int size = get_argument(esp, 2);
 
-  validate_pointer(buf);  
+  validate_pointer(buf, size);  
 
   if (fd == STDIN_FILENO) {
     int n = 0;
@@ -257,7 +261,7 @@ remove( void *esp )
   /* Get arguments. */
   const char* name = get_argument(esp, 0);
 
-  validate_pointer(name);
+  validate_pointer(name, 14); // Maximum of 14 chars in file name.
 
   bool success = false;
   success = filesys_remove(name);
@@ -289,7 +293,7 @@ static int
 exec( void* esp )
 {
   const char* cmd_line = get_argument(esp, 0);
-  validate_pointer(cmd_line);
+  validate_pointer(cmd_line, 1); 
   int pid = process_execute(cmd_line);
   return pid;
 }

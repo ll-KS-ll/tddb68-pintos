@@ -48,20 +48,18 @@ process_execute (const char *file_name)
 
   fn_copy2 = strtok_r(fn_copy2, " ", &save_ptr);
 
-  /* Best control if file exist in filesys ever. */
-  struct file *f = filesys_open(fn_copy2);
-  if(f == NULL)
-    return TID_ERROR;
-  else
-    file_close(f);
-
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn_copy2, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
 
-  sema_down(&get_thread (tid)->sema_exec);
+  /* Wait for child to load. */
+  struct thread *child = get_thread (tid);
+  sema_down(&child->sema_exec);
 
+  /* Check if child didn't load successfully. */
+  if(!child->load_success)
+    return -1;
   return tid;
 }
 
@@ -83,10 +81,13 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  thread_current ()->load_success = success;
+  sema_up(&thread_current ()->sema_exec);
+  thread_yield ();
+
   if (!success) 
     thread_exit ();
 
-  sema_up(&thread_current ()->sema_exec);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -188,7 +189,8 @@ process_exit (void)
   }
   lock_release(&t->cs_lock);
 
-  printf("%s: exit(%d)\n", t->name, t->exit_status);
+  if (t->load_success)
+    printf("%s: exit(%d)\n", t->name, t->exit_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
